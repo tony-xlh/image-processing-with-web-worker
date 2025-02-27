@@ -14,9 +14,9 @@ function binarize(imageData,threshold){
   }
 
   if (threshold === -1) {
-    threshold = ostu(grayscaleValues);
+    threshold = calculateMean(grayscaleValues);
   }
-  
+
   console.log("threshold", threshold);
   let grayscaleIndex = 0;
   for (let i = 0; i < pixels.length; i += 4) {
@@ -30,6 +30,14 @@ function binarize(imageData,threshold){
     pixels[i + 1] = value;
     pixels[i + 2] = value;
   }
+}
+
+function calculateMean(grayscaleValues) {
+  let sum = 0;
+  for (let i = 0; i < grayscaleValues.length; i++) {
+    sum += grayscaleValues[i];
+  }
+  return sum / grayscaleValues.length;
 }
 
 onmessage = (e) => {

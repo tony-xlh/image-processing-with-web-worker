@@ -41,6 +41,10 @@
         <option value="3">Do not use web worker</option>
       </select>
     </label>
+    <label>
+      Block size:
+      <input type="text" id="blocksize" placeholder="Block size" value="60" />
+    </label>
     <button id="convertButton">Convert to Binary</button>
     <span id="status"></span>
     <div class="imageContainer">
@@ -75,8 +79,11 @@
     })
 
     function drawImageToCanvas(image){
-      cvs.width = image.naturalWidth;
-      cvs.height = image.naturalHeight;
+      const blockSize = parseInt(document.getElementById("blocksize").value);
+      const targetWidth = Math.ceil(image.naturalWidth/blockSize) * blockSize;
+      const targetHeight = Math.ceil(image.naturalHeight/blockSize) * blockSize;
+      cvs.width = targetWidth;
+      cvs.height = targetHeight;
       const ctx = cvs.getContext("2d");
       ctx.drawImage(image,0,0);
     }
@@ -84,8 +91,6 @@
     function process(){
       const option = parseInt(document.getElementById("option").value);
       drawImageToCanvas(document.getElementById("imageHidden"));
-      const ctx = cvs.getContext("2d");
-      
       let threshold = parseInt(document.getElementById("threshold").value);
       if (document.getElementById("otsu").checked) {
         threshold = -1;
@@ -93,19 +98,39 @@
       updateStatus("Processing...");
       startTime = performance.now();
       if (option === 1) {
-        processWithWebWorker(1,threshold);
+        processWithWebWorkers(1,threshold);
       } else if (option === 2) {
-        processWithWebWorker(4,threshold);
+        processWithWebWorkers(4,threshold);
       } else {
-        const imageData = ctx.getImageData(0,0,cvs.width,cvs.height);
-        binarize(imageData,threshold);
-        completed(imageData);
+        adaptiveThreshold(threshold);
       }
     }
 
-    function processWithWebWorker(workersCount,threshold){
+    function adaptiveThreshold(threshold){
+      const ctx = cvs.getContext("2d");
+      const blockSize = parseInt(document.getElementById("blocksize").value);
+      const horizontalNumber = Math.ceil(image.naturalWidth/blockSize);
+      const verticalNumber = Math.ceil(image.naturalHeight/blockSize);
+      const imageData = ctx.getImageData(0,0,cvs.width,cvs.height);
+      for (let i = 0; i < verticalNumber; i++) {
+        for (let j = 0; j < horizontalNumber; j++) {
+          const x = j * blockSize;
+          const y = i * blockSize;
+          const block = ctx.getImageData(x,y,blockSize,blockSize);
+          binarize(block,threshold);
+          ctx.putImageData(block,x,y);
+        }
+      }
+      document.getElementById("image").src = cvs.toDataURL();
+    }
+
+    function processWithWebWorkers(workersCount,threshold){
       var finished = 0;
-      const blockSize = cvs.height / workersCount; // Height of the picture chunck for every worker
+      const image = document.getElementById("imageHidden");
+      const blockSize = parseInt(document.getElementById("blocksize").value);
+      const horizontalNumber = Math.ceil(image.naturalWidth/blockSize);
+      const verticalNumber = Math.ceil(image.naturalHeight/blockSize);
+      
       const ctx = cvs.getContext("2d");
       // Function called when a job is finished
       const onWorkEnded = function (e) {
@@ -127,18 +152,17 @@
             updateStatus("Done in " + (endTime - startTime) + "ms");
           }
       };
-
-      // Launching every worker
+      var workers = [];
+      // create workers
       for (var index = 0; index < workersCount; index++) {
           var worker = new Worker("binarize.js");
           worker.onmessage = onWorkEnded;
-
-          // Getting the picture
-          var imageData = ctx.getImageData(0, blockSize * index, cvs.width, blockSize);
-
-          // Sending canvas data to the worker using a copy memory operation
-          worker.postMessage({ imageData: imageData, index: index, threshold: threshold });
+          workers.push(worker);
       }
+    }
+
+    function processWithOneWorker(){
+
     }
 
     function loadImageFromFile(){
