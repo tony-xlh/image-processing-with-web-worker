@@ -49,10 +49,6 @@
     const worker = new Worker("binarize.js");
     let startTime = 0;
     let endTime = 0;
-    worker.onmessage = (e) => {
-      console.log(e);
-      completed(e.data.imageData);
-    };
 
     function completed(imageData){
       endTime = performance.now();
@@ -85,17 +81,56 @@
       const option = parseInt(document.getElementById("option").value);
       drawImageToCanvas(document.getElementById("imageHidden"));
       const ctx = cvs.getContext("2d");
-      const imageData = ctx.getImageData(0,0,cvs.width,cvs.height);
+      
       const threshold = parseInt(document.getElementById("threshold").value);
       updateStatus("Processing...");
       startTime = performance.now();
       if (option === 1) {
-        worker.postMessage({ imageData: imageData, threshold: threshold });
+        processWithWebWorker(1,threshold);
       } else if (option === 2) {
-        
+        processWithWebWorker(4,threshold);
       } else {
+        const imageData = ctx.getImageData(0,0,cvs.width,cvs.height);
         binarize(imageData,threshold);
         completed(imageData);
+      }
+    }
+
+    function processWithWebWorker(workersCount,threshold){
+      var finished = 0;
+      const blockSize = cvs.height / workersCount; // Height of the picture chunck for every worker
+      const ctx = cvs.getContext("2d");
+      // Function called when a job is finished
+      const onWorkEnded = function (e) {
+          // Data is retrieved using a memory clone operation
+          const data = e.data.imageData;
+          const index = e.data.index;
+
+          // Copying back canvas data to canvas
+          // If the first webworker  (index 0) returns data, apply it at pixel (0, 0) onwards
+          // If the second webworker  (index 1) returns data, apply it at pixel (0, canvas.height/4) onwards, and so on
+          ctx.putImageData(data, 0, blockSize * index);
+
+          finished++;
+          console.log("finished",finished);
+
+          if (finished == workersCount) {
+            endTime = performance.now();
+            document.getElementById("image").src = cvs.toDataURL();
+            updateStatus("Done in " + (endTime - startTime) + "ms");
+          }
+      };
+
+      // Launching every worker
+      for (var index = 0; index < workersCount; index++) {
+          var worker = new Worker("binarize.js");
+          worker.onmessage = onWorkEnded;
+
+          // Getting the picture
+          var imageData = ctx.getImageData(0, blockSize * index, cvs.width, blockSize);
+
+          // Sending canvas data to the worker using a copy memory operation
+          worker.postMessage({ imageData: imageData, index: index, threshold: threshold });
       }
     }
 

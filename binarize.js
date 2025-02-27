@@ -32,5 +32,5 @@ onmessage = (e) => {
   let data = e.data;
   binarize(data.imageData, data.threshold);
   console.log("Posting message back to main script");
-  postMessage({imageData:data.imageData});
+  postMessage({imageData:data.imageData, index:data.index});
 };
