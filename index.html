@@ -17,6 +17,7 @@
     display: none;
   }
   </style>
+  <script src="./binarize.js"></script>
 </head>
 <html>
 <body>
@@ -27,6 +28,14 @@
     <label>
       Threshold:
       <input type="text" id="threshold" placeholder="Threshold" value="127" />
+    </label>
+    <label>
+      Option:
+      <select id="option">
+        <option value="1">Use one web worker</option>
+        <option value="2">Use four web workers</option>
+        <option value="3">Do not use web worker</option>
+      </select>
     </label>
     <button id="convertButton">Convert to Binary</button>
     <span id="status"></span>
@@ -41,13 +50,17 @@
     let startTime = 0;
     let endTime = 0;
     worker.onmessage = (e) => {
-      endTime = performance.now();
       console.log(e);
+      completed(e.data.imageData);
+    };
+
+    function completed(imageData){
+      endTime = performance.now();
       const ctx = cvs.getContext("2d");
-      ctx.putImageData(e.data.imageData,0,0);
+      ctx.putImageData(imageData,0,0);
       document.getElementById("image").src = cvs.toDataURL();
       updateStatus("Done in " + (endTime - startTime) + "ms");
-    };
+    }
 
     function updateStatus(info){
       document.getElementById("status").innerText = info;
@@ -69,13 +82,21 @@
     }
 
     function process(){
+      const option = parseInt(document.getElementById("option").value);
       drawImageToCanvas(document.getElementById("imageHidden"));
       const ctx = cvs.getContext("2d");
       const imageData = ctx.getImageData(0,0,cvs.width,cvs.height);
       const threshold = parseInt(document.getElementById("threshold").value);
       updateStatus("Processing...");
       startTime = performance.now();
-      worker.postMessage({ imageData: imageData, threshold: threshold });
+      if (option === 1) {
+        worker.postMessage({ imageData: imageData, threshold: threshold });
+      } else if (option === 2) {
+        
+      } else {
+        binarize(imageData,threshold);
+        completed(imageData);
+      }
     }
 
     function loadImageFromFile(){

@@ -2,7 +2,7 @@ function convertToGrayscale(r, g, b) {
   return (r * 6966 + g * 23436 + b * 2366) >> 15;
 }
 
-function process(imageData,threshold){
+function binarize(imageData,threshold){
   const pixels = imageData.data; //[r,g,b,a,...]
   const grayscaleValues = [];
   for (let i = 0; i < pixels.length; i += 4) {
@@ -30,7 +30,7 @@ onmessage = (e) => {
   console.log(e);
   console.log("Message received from main script");
   let data = e.data;
-  process(data.imageData, data.threshold);
+  binarize(data.imageData, data.threshold);
   console.log("Posting message back to main script");
   postMessage({imageData:data.imageData});
 };
