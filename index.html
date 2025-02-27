@@ -58,14 +58,6 @@
     let startTime = 0;
     let endTime = 0;
 
-    function completed(imageData){
-      endTime = performance.now();
-      const ctx = cvs.getContext("2d");
-      ctx.putImageData(imageData,0,0);
-      document.getElementById("image").src = cvs.toDataURL();
-      updateStatus("Done in " + (endTime - startTime) + "ms");
-    }
-
     function updateStatus(info){
       document.getElementById("status").innerText = info;
     }
@@ -88,7 +80,7 @@
       ctx.drawImage(image,offset,offset);
     }
 
-    function process(){
+    async function process(){
       const option = parseInt(document.getElementById("option").value);
       
       let threshold = parseInt(document.getElementById("threshold").value);
@@ -96,6 +88,7 @@
         threshold = -1;
       }
       updateStatus("Processing...");
+      await sleep(200);
       startTime = performance.now();
       if (option === 1) {
         processWithWebWorkers(1,threshold);
@@ -103,7 +96,15 @@
         processWithWebWorkers(4,threshold);
       } else {
         adaptiveThreshold(threshold);
+        endTime = performance.now();
+        updateStatus("Done in " + (endTime - startTime) + "ms");
       }
+    }
+
+    function sleep(time){
+      return new Promise(function(resolve){
+        setTimeout(resolve, time);
+      });
     }
 
     function adaptiveThreshold(threshold){
@@ -127,7 +128,7 @@
           const x = j;
           const y = i;
           const block = ctx.getImageData(x,y,blockSize,blockSize);
-          const newValue = binarize(block,threshold,blockSize);
+          const newValue = binarize(block,blockSize);
           pixels[pixelIndex] = newValue;
           pixels[pixelIndex + 1] = newValue;
           pixels[pixelIndex + 2] = newValue;
@@ -142,44 +143,77 @@
     }
 
     function processWithWebWorkers(workersCount,threshold){
-      var finished = 0;
       const image = document.getElementById("imageHidden");
       const blockSize = parseInt(document.getElementById("blocksize").value);
-      const horizontalNumber = Math.ceil(image.naturalWidth/blockSize);
-      const verticalNumber = Math.ceil(image.naturalHeight/blockSize);
-      
+      const offset = (blockSize - 1 ) / 2;  //  (5 - 1) / 2 = 2
+
+      drawImageToCanvasWithBorder(cvs,image,offset);
+
       const ctx = cvs.getContext("2d");
-      // Function called when a job is finished
-      const onWorkEnded = function (e) {
-          // Data is retrieved using a memory clone operation
-          const data = e.data.imageData;
-          const index = e.data.index;
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
 
-          // Copying back canvas data to canvas
-          // If the first webworker  (index 0) returns data, apply it at pixel (0, 0) onwards
-          // If the second webworker  (index 1) returns data, apply it at pixel (0, canvas.height/4) onwards, and so on
-          ctx.putImageData(data, 0, blockSize * index);
+      const newImageData = ctx.createImageData(width, height);
+      const pixels = newImageData.data;
+      let pixelIndex = 0;
+      let coordinatesToProcess = [];
+      for (let i = 0; i < height; i++) {
+        for (let j = 0; j < width; j++) {
+          const x = j;
+          const y = i;
+          coordinatesToProcess.push({x:x,y:y,pixelIndex:pixelIndex});
+          pixelIndex = pixelIndex + 4
+        }
+      }
+      console.log(JSON.stringify(coordinatesToProcess));
+      let finished = 0;
+      let onWorkEnded = function(e){
+        if ( finished <= 10 ){
+          console.log(e);
+        }
+        let pixelIndexToFill = e.data.pixelIndex;
+        let newValue = e.data.value;
+        pixels[pixelIndexToFill] = newValue;
+        pixels[pixelIndexToFill + 1] = newValue;
+        pixels[pixelIndexToFill + 2] = newValue;
+        pixels[pixelIndexToFill + 3] = 255;
+        finished++;
+        if (finished === width * height) {
+          cvs.width = width;
+          cvs.height = height;
+          ctx.putImageData(newImageData,0,0);
+          document.getElementById("image").src = cvs.toDataURL("image/jpeg");
+          endTime = performance.now();
+          updateStatus("Done in " + (endTime - startTime) + "ms");
+        }else{
+          //console.log(e);
+          //return;
 
-          finished++;
-          console.log("finished",finished);
+            let coordinate = coordinatesToProcess.pop(0);
+            processWithOneWorker(e.target,coordinate,blockSize,width);
+        }
+      }
 
-          if (finished == workersCount) {
-            endTime = performance.now();
-            document.getElementById("image").src = cvs.toDataURL();
-            updateStatus("Done in " + (endTime - startTime) + "ms");
-          }
-      };
-      var workers = [];
       // create workers
+      let workers = [];
       for (var index = 0; index < workersCount; index++) {
           var worker = new Worker("binarize.js");
           worker.onmessage = onWorkEnded;
           workers.push(worker);
+          let coordinate = coordinatesToProcess.pop(0);
+          processWithOneWorker(worker,coordinate,blockSize,width);
       }
     }
 
-    function processWithOneWorker(){
-
+    function processWithOneWorker(worker,coordinate,blockSize,width,height){
+      const ctx = cvs.getContext("2d");
+      //console.log(coordinate);
+      const block = ctx.getImageData(coordinate.x,coordinate.y,blockSize,blockSize);
+      worker.postMessage({
+        imageData: block,
+        blockSize: blockSize,
+        pixelIndex: coordinate.pixelIndex,
+      });
     }
 
     function loadImageFromFile(){
