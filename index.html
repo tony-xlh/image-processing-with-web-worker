@@ -26,14 +26,6 @@
     <button id="loadFileButton">Load a File</button>
     <input style="display:none;" type="file" id="file" onchange="loadImageFromFile();" accept=".jpg,.jpeg,.png,.bmp" />
     <label>
-      Threshold:
-      <input type="text" id="threshold" placeholder="Threshold" value="127" />
-    </label>
-    <labe>
-      OTSU:
-      <input type="checkbox" id="otsu" checked/>
-    </labe>
-    <label>
       Option:
       <select id="option">
         <option value="1">Use one web worker</option>
@@ -82,20 +74,15 @@
 
     async function process(){
       const option = parseInt(document.getElementById("option").value);
-      
-      let threshold = parseInt(document.getElementById("threshold").value);
-      if (document.getElementById("otsu").checked) {
-        threshold = -1;
-      }
       updateStatus("Processing...");
       await sleep(200);
       startTime = performance.now();
       if (option === 1) {
-        processWithWebWorkers(1,threshold);
+        processWithWebWorkers(1);
       } else if (option === 2) {
-        processWithWebWorkers(4,threshold);
+        processWithWebWorkers(4);
       } else {
-        adaptiveThreshold(threshold);
+        adaptiveThreshold();
         endTime = performance.now();
         updateStatus("Done in " + (endTime - startTime) + "ms");
       }
@@ -107,7 +94,7 @@
       });
     }
 
-    function adaptiveThreshold(threshold){
+    function adaptiveThreshold(){
       const image = document.getElementById("imageHidden");
       const blockSize = parseInt(document.getElementById("blocksize").value);
       const offset = (blockSize - 1 ) / 2;  //  (5 - 1) / 2 = 2
@@ -142,7 +129,7 @@
       document.getElementById("image").src = cvs.toDataURL("image/jpeg");
     }
 
-    function processWithWebWorkers(workersCount,threshold){
+    function processWithWebWorkers(workersCount){
       const image = document.getElementById("imageHidden");
       const blockSize = parseInt(document.getElementById("blocksize").value);
       const offset = (blockSize - 1 ) / 2;  //  (5 - 1) / 2 = 2
@@ -165,12 +152,9 @@
           pixelIndex = pixelIndex + 4
         }
       }
-      console.log(JSON.stringify(coordinatesToProcess));
+
       let finished = 0;
       let onWorkEnded = function(e){
-        if ( finished <= 10 ){
-          console.log(e);
-        }
         let pixelIndexToFill = e.data.pixelIndex;
         let newValue = e.data.value;
         pixels[pixelIndexToFill] = newValue;
@@ -186,11 +170,8 @@
           endTime = performance.now();
           updateStatus("Done in " + (endTime - startTime) + "ms");
         }else{
-          //console.log(e);
-          //return;
-
-            let coordinate = coordinatesToProcess.pop(0);
-            processWithOneWorker(e.target,coordinate,blockSize,width);
+          let coordinate = coordinatesToProcess.pop(0);
+          processWithOneWorker(e.target,coordinate,blockSize,width);
         }
       }
 
@@ -206,14 +187,16 @@
     }
 
     function processWithOneWorker(worker,coordinate,blockSize,width,height){
-      const ctx = cvs.getContext("2d");
-      //console.log(coordinate);
-      const block = ctx.getImageData(coordinate.x,coordinate.y,blockSize,blockSize);
-      worker.postMessage({
-        imageData: block,
-        blockSize: blockSize,
-        pixelIndex: coordinate.pixelIndex,
-      });
+      if (coordinate) {
+        const ctx = cvs.getContext("2d");
+        //console.log(coordinate);
+        const block = ctx.getImageData(coordinate.x,coordinate.y,blockSize,blockSize);
+        worker.postMessage({
+          imageData: block,
+          blockSize: blockSize,
+          pixelIndex: coordinate.pixelIndex,
+        });
+      }
     }
 
     function loadImageFromFile(){
