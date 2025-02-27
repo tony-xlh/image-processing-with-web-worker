@@ -29,6 +29,10 @@
       Threshold:
       <input type="text" id="threshold" placeholder="Threshold" value="127" />
     </label>
+    <labe>
+      OTSU:
+      <input type="checkbox" id="otsu" checked/>
+    </labe>
     <label>
       Option:
       <select id="option">
@@ -82,7 +86,10 @@
       drawImageToCanvas(document.getElementById("imageHidden"));
       const ctx = cvs.getContext("2d");
       
-      const threshold = parseInt(document.getElementById("threshold").value);
+      let threshold = parseInt(document.getElementById("threshold").value);
+      if (document.getElementById("otsu").checked) {
+        threshold = -1;
+      }
       updateStatus("Processing...");
       startTime = performance.now();
       if (option === 1) {
