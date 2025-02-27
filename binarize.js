@@ -2,8 +2,11 @@ function convertToGrayscale(r, g, b) {
   return (r * 6966 + g * 23436 + b * 2366) >> 15;
 }
 
-function binarize(imageData,threshold){
+//only update the value of the center pixel
+function binarize(imageData,threshold,blockSize){
+  const centerIndex = Math.ceil(blockSize * blockSize / 2);
   const pixels = imageData.data; //[r,g,b,a,...]
+  //console.log(pixels);
   const grayscaleValues = [];
   for (let i = 0; i < pixels.length; i += 4) {
     const red = pixels[i];
@@ -17,19 +20,19 @@ function binarize(imageData,threshold){
     threshold = calculateMean(grayscaleValues);
   }
 
-  console.log("threshold", threshold);
   let grayscaleIndex = 0;
   for (let i = 0; i < pixels.length; i += 4) {
-    const gray = grayscaleValues[grayscaleIndex];
-    grayscaleIndex = grayscaleIndex + 1;
-    let value = 255;
-    if (gray < threshold) {
-      value = 0;
+    if (grayscaleIndex === centerIndex) {
+      const gray = grayscaleValues[grayscaleIndex];
+      let value = 255;
+      if (gray < threshold) {
+        value = 0;
+      }
+      return value;
     }
-    pixels[i] = value;
-    pixels[i + 1] = value;
-    pixels[i + 2] = value;
+    grayscaleIndex = grayscaleIndex + 1;
   }
+  return -1;
 }
 
 function calculateMean(grayscaleValues) {

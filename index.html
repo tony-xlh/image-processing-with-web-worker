@@ -43,7 +43,7 @@
     </label>
     <label>
       Block size:
-      <input type="text" id="blocksize" placeholder="Block size" value="60" />
+      <input type="text" id="blocksize" placeholder="Block size" value="31" />
     </label>
     <button id="convertButton">Convert to Binary</button>
     <span id="status"></span>
@@ -78,19 +78,19 @@
       process();
     })
 
-    function drawImageToCanvas(image){
+    function drawImageToCanvasWithBorder(targetCVS,image,offset){
       const blockSize = parseInt(document.getElementById("blocksize").value);
-      const targetWidth = Math.ceil(image.naturalWidth/blockSize) * blockSize;
-      const targetHeight = Math.ceil(image.naturalHeight/blockSize) * blockSize;
-      cvs.width = targetWidth;
-      cvs.height = targetHeight;
-      const ctx = cvs.getContext("2d");
-      ctx.drawImage(image,0,0);
+      const targetWidth = image.naturalWidth + 2*offset;
+      const targetHeight = image.naturalHeight + 2*offset;
+      targetCVS.width = targetWidth;
+      targetCVS.height = targetHeight;
+      const ctx = targetCVS.getContext("2d");
+      ctx.drawImage(image,offset,offset);
     }
 
     function process(){
       const option = parseInt(document.getElementById("option").value);
-      drawImageToCanvas(document.getElementById("imageHidden"));
+      
       let threshold = parseInt(document.getElementById("threshold").value);
       if (document.getElementById("otsu").checked) {
         threshold = -1;
@@ -107,21 +107,38 @@
     }
 
     function adaptiveThreshold(threshold){
-      const ctx = cvs.getContext("2d");
+      const image = document.getElementById("imageHidden");
       const blockSize = parseInt(document.getElementById("blocksize").value);
-      const horizontalNumber = Math.ceil(image.naturalWidth/blockSize);
-      const verticalNumber = Math.ceil(image.naturalHeight/blockSize);
+      const offset = (blockSize - 1 ) / 2;  //  (5 - 1) / 2 = 2
+
+      drawImageToCanvasWithBorder(cvs,image,offset);
+
+      const ctx = cvs.getContext("2d");
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
+
       const imageData = ctx.getImageData(0,0,cvs.width,cvs.height);
-      for (let i = 0; i < verticalNumber; i++) {
-        for (let j = 0; j < horizontalNumber; j++) {
-          const x = j * blockSize;
-          const y = i * blockSize;
+      const newImageData = ctx.createImageData(width, height);
+
+      const pixels = newImageData.data;
+      let pixelIndex = 0;
+      for (let i = 0; i < height; i++) {
+        for (let j = 0; j < width; j++) {
+          const x = j;
+          const y = i;
           const block = ctx.getImageData(x,y,blockSize,blockSize);
-          binarize(block,threshold);
-          ctx.putImageData(block,x,y);
+          const newValue = binarize(block,threshold,blockSize);
+          pixels[pixelIndex] = newValue;
+          pixels[pixelIndex + 1] = newValue;
+          pixels[pixelIndex + 2] = newValue;
+          pixels[pixelIndex + 3] = 255;
+          pixelIndex = pixelIndex + 4
         }
       }
-      document.getElementById("image").src = cvs.toDataURL();
+      cvs.width = width;
+      cvs.height = height;
+      ctx.putImageData(newImageData,0,0);
+      document.getElementById("image").src = cvs.toDataURL("image/jpeg");
     }
 
     function processWithWebWorkers(workersCount,threshold){
