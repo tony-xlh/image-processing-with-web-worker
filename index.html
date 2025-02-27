@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Processing with Web Worker</title>
+  <style>
+  .imageContainer {
+    overflow: auto;
+    max-width: 360px;
+  }
+
+  .imageContainer img{
+    width: 100%;
+  }
+
+  #imageHidden {
+    display: none;
+  }
+  </style>
+</head>
+<html>
+<body>
+  <div id="app">
+    <h2>Image Processing with Web Worker</h2>
+    <button id="loadFileButton">Load a File</button>
+    <input style="display:none;" type="file" id="file" onchange="loadImageFromFile();" accept=".jpg,.jpeg,.png,.bmp" />
+    <label>
+      Threshold:
+      <input type="text" id="threshold" placeholder="Threshold" value="127" />
+    </label>
+    <button id="convertButton">Convert to Binary</button>
+    <span id="status"></span>
+    <div class="imageContainer">
+      <img id="image"/>
+      <img id="imageHidden"/>
+    </div>
+  </div>
+  <script>
+    const cvs = document.createElement("canvas");
+    const worker = new Worker("binarize.js");
+    let startTime = 0;
+    let endTime = 0;
+    worker.onmessage = (e) => {
+      endTime = performance.now();
+      console.log(e);
+      const ctx = cvs.getContext("2d");
+      ctx.putImageData(e.data.imageData,0,0);
+      document.getElementById("image").src = cvs.toDataURL();
+      updateStatus("Done in " + (endTime - startTime) + "ms");
+    };
+
+    function updateStatus(info){
+      document.getElementById("status").innerText = info;
+    }
+
+    document.getElementById("loadFileButton").addEventListener("click",function(){
+      document.getElementById("file").click();
+    })
+
+    document.getElementById("convertButton").addEventListener("click",function(){
+      process();
+    })
+
+    function drawImageToCanvas(image){
+      cvs.width = image.naturalWidth;
+      cvs.height = image.naturalHeight;
+      const ctx = cvs.getContext("2d");
+      ctx.drawImage(image,0,0);
+    }
+
+    function process(){
+      drawImageToCanvas(document.getElementById("imageHidden"));
+      const ctx = cvs.getContext("2d");
+      const imageData = ctx.getImageData(0,0,cvs.width,cvs.height);
+      const threshold = parseInt(document.getElementById("threshold").value);
+      updateStatus("Processing...");
+      startTime = performance.now();
+      worker.postMessage({ imageData: imageData, threshold: threshold });
+    }
+
+    function loadImageFromFile(){
+      let fileInput = document.getElementById("file");
+      let files = fileInput.files;
+      if (files.length == 0) {
+        return;
+      }
+      let file = files[0];
+      fileReader = new FileReader();
+      fileReader.onload = function(e){
+        document.getElementById("image").src = e.target.result;
+        document.getElementById("imageHidden").src = e.target.result;
+      };
+      fileReader.onerror = function () {
+        console.warn('oops, something went wrong.');
+      };
+      fileReader.readAsDataURL(file);
+    }
+  </script>
+</body>
+</html>
