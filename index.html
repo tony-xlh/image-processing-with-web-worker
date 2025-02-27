@@ -30,14 +30,15 @@
       <select id="option">
         <option value="1">Use one web worker</option>
         <option value="2">Use four web workers</option>
-        <option value="3">Do not use web worker</option>
+        <option value="3">Use eight web workers</option>
+        <option value="4">Do not use web worker</option>
       </select>
     </label>
     <label>
       Block size:
       <input type="text" id="blocksize" placeholder="Block size" value="31" />
     </label>
-    <button id="convertButton">Convert to Binary</button>
+    <button id="adaptiveThresholdButton">Adaptive Threshold</button>
     <span id="status"></span>
     <div class="imageContainer">
       <img id="image"/>
@@ -58,8 +59,8 @@
       document.getElementById("file").click();
     })
 
-    document.getElementById("convertButton").addEventListener("click",function(){
-      process();
+    document.getElementById("adaptiveThresholdButton").addEventListener("click",function(){
+      adaptiveThreshold();
     })
 
     function drawImageToCanvasWithBorder(targetCVS,image,offset){
@@ -72,17 +73,19 @@
       ctx.drawImage(image,offset,offset);
     }
 
-    async function process(){
+    async function adaptiveThreshold(){
       const option = parseInt(document.getElementById("option").value);
       updateStatus("Processing...");
       await sleep(200);
       startTime = performance.now();
       if (option === 1) {
-        processWithWebWorkers(1);
+        adaptiveThresholdInWebWorkers(1);
       } else if (option === 2) {
-        processWithWebWorkers(4);
-      } else {
-        adaptiveThreshold();
+        adaptiveThresholdInWebWorkers(4);
+      } else if (option === 3) {
+        adaptiveThresholdInWebWorkers(8);
+      }else {
+        adaptiveThresholdInMain();
         endTime = performance.now();
         updateStatus("Done in " + (endTime - startTime) + "ms");
       }
@@ -94,7 +97,7 @@
       });
     }
 
-    function adaptiveThreshold(){
+    function adaptiveThresholdInMain(){
       const image = document.getElementById("imageHidden");
       const blockSize = parseInt(document.getElementById("blocksize").value);
       const offset = (blockSize - 1 ) / 2;  //  (5 - 1) / 2 = 2
@@ -129,7 +132,7 @@
       document.getElementById("image").src = cvs.toDataURL("image/jpeg");
     }
 
-    function processWithWebWorkers(workersCount){
+    function adaptiveThresholdInWebWorkers(workersCount){
       const image = document.getElementById("imageHidden");
       const blockSize = parseInt(document.getElementById("blocksize").value);
       const offset = (blockSize - 1 ) / 2;  //  (5 - 1) / 2 = 2
