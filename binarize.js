@@ -1,4 +1,3 @@
-
 function computeIntegralImage(data, width, height) {
   const integral = new Uint32Array(width * height);
 
@@ -23,6 +22,7 @@ function getAreaSum(integral, width, x1, y1, x2, y2) {
 }
 
 function adaptiveThreshold(imageData, blockSize, C) {
+  console.log("adaptiveThreshold");
   const width = imageData.width;
   const height = imageData.height;
   const data = imageData.data;
@@ -56,5 +56,5 @@ function adaptiveThreshold(imageData, blockSize, C) {
 onmessage = (e) => {
   let data = e.data;
   let imageData = adaptiveThreshold(data.imageData, data.blockSize, data.C);
-  postMessage({imageData:imageData});
+  postMessage({imageData:imageData,imageIndex:data.imageIndex});
 };

@@ -5,7 +5,7 @@
   <title>Image Processing with Web Worker</title>
   <style>
   .imageContainer {
-    overflow: none;
+    display: flex;
     max-width: 640px;
     height: 150px;
   }
@@ -38,6 +38,10 @@
       Block size:
       <input type="text" id="blocksize" placeholder="Block size" value="31" />
     </label>
+    <label>
+      Constant C:
+      <input type="text" id="constant" placeholder="Constant C" value="10" />
+    </label>
     <button id="adaptiveThresholdButton">Adaptive Threshold</button>
     <div id="status"></div>
     <div id="images"></div>
@@ -54,8 +58,92 @@
     })
 
     document.getElementById("adaptiveThresholdButton").addEventListener("click",function(){
-      adaptiveThreshold();
+      process();
     })
+
+    function process(){
+      console.log("process");
+      let containers = document.getElementsByClassName("imageContainer");
+      let imagesToProcess = [];
+      for (let index = 0; index < containers.length; index++) {
+        const container = containers[index];
+        const img = container.getElementsByTagName("img")[0];
+        imagesToProcess.push(img);
+      }
+      console.log(imagesToProcess);
+      let option = document.getElementById("option").value;
+      if (option === "1") {
+        processImagesWithWorkers(imagesToProcess,1);
+      } else if (option === "2") {
+        processImagesWithWorkers(imagesToProcess,4);
+      } else if (option === "3") {
+        processImagesWithoutWorker(imagesToProcess);
+      }
+    }
+
+    function updateProcessedImage(imageIndex,imageData) {
+      let img = document.querySelector(`img[data-index="${imageIndex}"]`);
+      let processedImage = img.nextElementSibling;
+      cvs.width = img.naturalWidth;
+      cvs.height = img.naturalHeight;
+      const ctx = cvs.getContext("2d");
+      ctx.putImageData(imageData,0,0);
+      processedImage.src = cvs.toDataURL();
+      processedImage.style.display = "block";
+    }
+
+    function processImagesWithWorkers(images,workerCount) {
+      let blockSize = parseInt(document.getElementById("blocksize").value);
+      let C = parseInt(document.getElementById("constant").value);
+      const onWorkerEnded = function(e) {
+        console.log(e);
+        updateProcessedImage(e.data.imageIndex,e.data.imageData);
+        if (images.length === 0) {
+          console.log("Done");
+        }
+        processOneImageWithWorker(images,blockSize,C,e.target);
+      }
+      for (let index = 0; index < workerCount; index++) {
+        let worker = new Worker("./binarize.js");
+        worker.onmessage = onWorkerEnded;
+        processOneImageWithWorker(images,blockSize,C,worker);
+      }
+    }
+
+    function processOneImageWithWorker(images,blockSize,C,worker){
+      let img = images.pop();
+      console.log(images);
+      console.log(img);
+      if (img) {
+        cvs.width = img.naturalWidth;
+        cvs.height = img.naturalHeight;
+        let ctx = cvs.getContext("2d");
+        ctx.drawImage(img,0,0);
+        let imageData = ctx.getImageData(0,0,img.naturalWidth,img.naturalHeight);
+        worker.postMessage({
+          imageIndex: img.getAttribute("data-index"),
+          imageData: imageData,
+          blockSize: blockSize,
+          C: C
+        });
+      }
+    }
+
+    function processImagesWithoutWorker(images){
+      let blockSize = parseInt(document.getElementById("blocksize").value);
+      let C = parseInt(document.getElementById("constant").value);
+      let img = images.pop();
+      while (img) {
+        cvs.width = img.naturalWidth;
+        cvs.height = img.naturalHeight;
+        let ctx = cvs.getContext("2d");
+        ctx.drawImage(img,0,0);
+        let imageData = ctx.getImageData(0,0,img.naturalWidth,img.naturalHeight);
+        let outputData = adaptiveThreshold(imageData,blockSize,C);
+        updateProcessedImage(img.getAttribute("data-index"),outputData);
+        img = images.pop();
+      }
+    }
 
     function sleep(time){
       return new Promise(function(resolve){
@@ -75,13 +163,13 @@
         fileReader.onload = function(e) {
           let img = document.createElement("img");
           img.src = e.target.result;
+          img.setAttribute("data-index",index);
           appendImage(img);
         };
         fileReader.onerror = function () {
           console.warn('oops, something went wrong.');
         };
         fileReader.readAsDataURL(file);
-        
       }
     }
 
@@ -90,6 +178,9 @@
       div.className = "imageContainer";
       div.appendChild(img);
       document.getElementById("images").appendChild(div);
+      let processedImage = document.createElement("img");
+      processedImage.style.display = "none";
+      div.appendChild(processedImage);
     }
   </script>
 </body>
