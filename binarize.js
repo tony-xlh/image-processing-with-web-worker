@@ -1,53 +1,60 @@
-function convertToGrayscale(r, g, b) {
-  return (r * 6966 + g * 23436 + b * 2366) >> 15;
-}
 
-//only update the value of the center pixel
-function binarize(imageData,blockSize){
-  const centerIndex = Math.ceil(blockSize * blockSize / 2);
-  const pixels = imageData.data; //[r,g,b,a,...]
-  //console.log(pixels);
-  const grayscaleValues = [];
-  for (let i = 0; i < pixels.length; i += 4) {
-    const red = pixels[i];
-    const green = pixels[i + 1];
-    const blue = pixels[i + 2];
-    const grayscale = convertToGrayscale(red, green, blue);
-    grayscaleValues.push(grayscale);
-  }
-  let threshold = calculateMean(grayscaleValues);
-  //console.log(threshold);
-  let grayscaleIndex = 0;
-  for (let i = 0; i < pixels.length; i += 4) {
-    if (grayscaleIndex === centerIndex) {
-      const gray = grayscaleValues[grayscaleIndex];
-      let value = 255;
-      if (gray < threshold) {
-        value = 0;
-      }
-      return value;
+function computeIntegralImage(data, width, height) {
+  const integral = new Uint32Array(width * height);
+
+  for (let y = 0; y < height; y++) {
+    let sum = 0;
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      sum += data[idx];
+      integral[y * width + x] = (y > 0 ? integral[(y - 1) * width + x] : 0) + sum;
     }
-    grayscaleIndex = grayscaleIndex + 1;
   }
-  console.log("wrong value");
-  console.log("grayscaleIndex",grayscaleIndex);
-  console.log("centerIndex",centerIndex);
-  return -1;
+
+  return integral;
 }
 
-function calculateMean(grayscaleValues) {
-  let sum = 0;
-  for (let i = 0; i < grayscaleValues.length; i++) {
-    sum += grayscaleValues[i];
+function getAreaSum(integral, width, x1, y1, x2, y2) {
+  const a = x1 > 0 && y1 > 0 ? integral[(y1 - 1) * width + (x1 - 1)] : 0;
+  const b = y1 > 0 ? integral[(y1 - 1) * width + x2] : 0;
+  const c = x1 > 0 ? integral[y2 * width + (x1 - 1)] : 0;
+  const d = integral[y2 * width + x2];
+  return d - b - c + a;
+}
+
+function adaptiveThreshold(imageData, blockSize, C) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const data = imageData.data;
+  const output = new ImageData(width, height);
+  const outputData = output.data;
+
+  const integral = computeIntegralImage(data, width, height);
+
+  const halfBlock = Math.floor(blockSize / 2);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const x1 = Math.max(x - halfBlock, 0);
+      const y1 = Math.max(y - halfBlock, 0);
+      const x2 = Math.min(x + halfBlock, width - 1);
+      const y2 = Math.min(y + halfBlock, height - 1);
+
+      const area = (x2 - x1 + 1) * (y2 - y1 + 1);
+      const sum = getAreaSum(integral, width, x1, y1, x2, y2);
+      const threshold = (sum / area) - C;
+
+      const idx = (y * width + x) * 4;
+      const pixelValue = data[idx];
+      outputData[idx] = outputData[idx + 1] = outputData[idx + 2] = pixelValue > threshold ? 255 : 0;
+      outputData[idx + 3] = 255; // Alpha channel
+    }
   }
-  return sum / grayscaleValues.length;
+  return output;
 }
 
 onmessage = (e) => {
-  //console.log(e);
-  //console.log("Message received from main script");
   let data = e.data;
-  let value = binarize(data.imageData, data.blockSize);
-  //console.log("Posting message back to main script");
-  postMessage({value: value, pixelIndex:data.pixelIndex});
+  let imageData = adaptiveThreshold(data.imageData, data.blockSize, data.C);
+  postMessage({imageData:imageData});
 };

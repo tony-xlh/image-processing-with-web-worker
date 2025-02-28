@@ -5,16 +5,17 @@
   <title>Image Processing with Web Worker</title>
   <style>
   .imageContainer {
-    overflow: auto;
-    max-width: 360px;
+    overflow: none;
+    max-width: 640px;
+    height: 150px;
   }
 
   .imageContainer img{
-    width: 100%;
-  }
-
-  #imageHidden {
-    display: none;
+    width: calc(50% - 10px);
+    height: calc(100% - 20px);
+    background: lightgray;
+    padding: 10px;
+    object-fit: contain;
   }
   </style>
   <script src="./binarize.js"></script>
@@ -23,15 +24,14 @@
 <body>
   <div id="app">
     <h2>Image Processing with Web Worker</h2>
-    <button id="loadFileButton">Load a File</button>
-    <input style="display:none;" type="file" id="file" onchange="loadImageFromFile();" accept=".jpg,.jpeg,.png,.bmp" />
+    <button id="loadFilesButton">Load Files</button>
+    <input style="display:none;" type="file" id="file" multiple onchange="loadImagesFromFiles();" accept=".jpg,.jpeg,.png,.bmp" />
     <label>
       Option:
       <select id="option">
         <option value="1">Use one web worker</option>
         <option value="2">Use four web workers</option>
-        <option value="3">Use eight web workers</option>
-        <option value="4">Do not use web worker</option>
+        <option value="3">Do not use web worker</option>
       </select>
     </label>
     <label>
@@ -39,23 +39,17 @@
       <input type="text" id="blocksize" placeholder="Block size" value="31" />
     </label>
     <button id="adaptiveThresholdButton">Adaptive Threshold</button>
-    <span id="status"></span>
-    <div class="imageContainer">
-      <img id="image"/>
-      <img id="imageHidden"/>
-    </div>
+    <div id="status"></div>
+    <div id="images"></div>
   </div>
   <script>
     const cvs = document.createElement("canvas");
-    const worker = new Worker("binarize.js");
-    let startTime = 0;
-    let endTime = 0;
 
     function updateStatus(info){
       document.getElementById("status").innerText = info;
     }
 
-    document.getElementById("loadFileButton").addEventListener("click",function(){
+    document.getElementById("loadFilesButton").addEventListener("click",function(){
       document.getElementById("file").click();
     })
 
@@ -63,161 +57,39 @@
       adaptiveThreshold();
     })
 
-    function drawImageToCanvasWithBorder(targetCVS,image,offset){
-      const blockSize = parseInt(document.getElementById("blocksize").value);
-      const targetWidth = image.naturalWidth + 2*offset;
-      const targetHeight = image.naturalHeight + 2*offset;
-      targetCVS.width = targetWidth;
-      targetCVS.height = targetHeight;
-      const ctx = targetCVS.getContext("2d");
-      ctx.drawImage(image,offset,offset);
-    }
-
-    async function adaptiveThreshold(){
-      const option = parseInt(document.getElementById("option").value);
-      updateStatus("Processing...");
-      await sleep(200);
-      startTime = performance.now();
-      if (option === 1) {
-        adaptiveThresholdInWebWorkers(1);
-      } else if (option === 2) {
-        adaptiveThresholdInWebWorkers(4);
-      } else if (option === 3) {
-        adaptiveThresholdInWebWorkers(8);
-      }else {
-        adaptiveThresholdInMain();
-        endTime = performance.now();
-        updateStatus("Done in " + (endTime - startTime) + "ms");
-      }
-    }
-
     function sleep(time){
       return new Promise(function(resolve){
         setTimeout(resolve, time);
       });
     }
 
-    function adaptiveThresholdInMain(){
-      const image = document.getElementById("imageHidden");
-      const blockSize = parseInt(document.getElementById("blocksize").value);
-      const offset = (blockSize - 1 ) / 2;  //  (5 - 1) / 2 = 2
-
-      drawImageToCanvasWithBorder(cvs,image,offset);
-
-      const ctx = cvs.getContext("2d");
-      const width = image.naturalWidth;
-      const height = image.naturalHeight;
-
-      const imageData = ctx.getImageData(0,0,cvs.width,cvs.height);
-      const newImageData = ctx.createImageData(width, height);
-
-      const pixels = newImageData.data;
-      let pixelIndex = 0;
-      for (let i = 0; i < height; i++) {
-        for (let j = 0; j < width; j++) {
-          const x = j;
-          const y = i;
-          const block = ctx.getImageData(x,y,blockSize,blockSize);
-          const newValue = binarize(block,blockSize);
-          pixels[pixelIndex] = newValue;
-          pixels[pixelIndex + 1] = newValue;
-          pixels[pixelIndex + 2] = newValue;
-          pixels[pixelIndex + 3] = 255;
-          pixelIndex = pixelIndex + 4
-        }
-      }
-      cvs.width = width;
-      cvs.height = height;
-      ctx.putImageData(newImageData,0,0);
-      document.getElementById("image").src = cvs.toDataURL("image/jpeg");
-    }
-
-    function adaptiveThresholdInWebWorkers(workersCount){
-      const image = document.getElementById("imageHidden");
-      const blockSize = parseInt(document.getElementById("blocksize").value);
-      const offset = (blockSize - 1 ) / 2;  //  (5 - 1) / 2 = 2
-
-      drawImageToCanvasWithBorder(cvs,image,offset);
-
-      const ctx = cvs.getContext("2d");
-      const width = image.naturalWidth;
-      const height = image.naturalHeight;
-
-      const newImageData = ctx.createImageData(width, height);
-      const pixels = newImageData.data;
-      let pixelIndex = 0;
-      let coordinatesToProcess = [];
-      for (let i = 0; i < height; i++) {
-        for (let j = 0; j < width; j++) {
-          const x = j;
-          const y = i;
-          coordinatesToProcess.push({x:x,y:y,pixelIndex:pixelIndex});
-          pixelIndex = pixelIndex + 4
-        }
-      }
-
-      let finished = 0;
-      let onWorkEnded = function(e){
-        let pixelIndexToFill = e.data.pixelIndex;
-        let newValue = e.data.value;
-        pixels[pixelIndexToFill] = newValue;
-        pixels[pixelIndexToFill + 1] = newValue;
-        pixels[pixelIndexToFill + 2] = newValue;
-        pixels[pixelIndexToFill + 3] = 255;
-        finished++;
-        if (finished === width * height) {
-          cvs.width = width;
-          cvs.height = height;
-          ctx.putImageData(newImageData,0,0);
-          document.getElementById("image").src = cvs.toDataURL("image/jpeg");
-          endTime = performance.now();
-          updateStatus("Done in " + (endTime - startTime) + "ms");
-        }else{
-          let coordinate = coordinatesToProcess.pop(0);
-          processWithOneWorker(e.target,coordinate,blockSize,width);
-        }
-      }
-
-      // create workers
-      let workers = [];
-      for (var index = 0; index < workersCount; index++) {
-          var worker = new Worker("binarize.js");
-          worker.onmessage = onWorkEnded;
-          workers.push(worker);
-          let coordinate = coordinatesToProcess.pop(0);
-          processWithOneWorker(worker,coordinate,blockSize,width);
-      }
-    }
-
-    function processWithOneWorker(worker,coordinate,blockSize,width,height){
-      if (coordinate) {
-        const ctx = cvs.getContext("2d");
-        //console.log(coordinate);
-        const block = ctx.getImageData(coordinate.x,coordinate.y,blockSize,blockSize);
-        worker.postMessage({
-          imageData: block,
-          blockSize: blockSize,
-          pixelIndex: coordinate.pixelIndex,
-        });
-      }
-    }
-
-    function loadImageFromFile(){
+    function loadImagesFromFiles(){
       let fileInput = document.getElementById("file");
       let files = fileInput.files;
       if (files.length == 0) {
         return;
       }
-      let file = files[0];
-      fileReader = new FileReader();
-      fileReader.onload = function(e){
-        document.getElementById("image").src = e.target.result;
-        document.getElementById("imageHidden").src = e.target.result;
-      };
-      fileReader.onerror = function () {
-        console.warn('oops, something went wrong.');
-      };
-      fileReader.readAsDataURL(file);
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+        const fileReader = new FileReader();
+        fileReader.onload = function(e) {
+          let img = document.createElement("img");
+          img.src = e.target.result;
+          appendImage(img);
+        };
+        fileReader.onerror = function () {
+          console.warn('oops, something went wrong.');
+        };
+        fileReader.readAsDataURL(file);
+        
+      }
+    }
+
+    function appendImage(img){
+      let div = document.createElement("div");
+      div.className = "imageContainer";
+      div.appendChild(img);
+      document.getElementById("images").appendChild(div);
     }
   </script>
 </body>
