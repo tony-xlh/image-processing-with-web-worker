@@ -48,7 +48,7 @@
   </div>
   <script>
     const cvs = document.createElement("canvas");
-
+    let startTime = 0;
     function updateStatus(info){
       document.getElementById("status").innerText = info;
     }
@@ -63,6 +63,7 @@
 
     function process(){
       console.log("process");
+      startTime = performance.now();
       let containers = document.getElementsByClassName("imageContainer");
       let imagesToProcess = [];
       for (let index = 0; index < containers.length; index++) {
@@ -78,6 +79,7 @@
         processImagesWithWorkers(imagesToProcess,4);
       } else if (option === "3") {
         processImagesWithoutWorker(imagesToProcess);
+        displayProcessedTime();
       }
     }
 
@@ -100,6 +102,7 @@
         updateProcessedImage(e.data.imageIndex,e.data.imageData);
         if (images.length === 0) {
           console.log("Done");
+          displayProcessedTime();
         }
         processOneImageWithWorker(images,blockSize,C,e.target);
       }
@@ -143,6 +146,12 @@
         updateProcessedImage(img.getAttribute("data-index"),outputData);
         img = images.pop();
       }
+    }
+
+    function displayProcessedTime(){
+      let endTime = performance.now();
+      let time = endTime - startTime;
+      updateStatus(`Processed in ${time} ms`);
     }
 
     function sleep(time){
