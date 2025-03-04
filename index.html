@@ -51,6 +51,7 @@
     <div id="images"></div>
   </div>
   <script>
+    let runningWorkers = 0;
     const cvs = document.createElement("canvas");
     let startTime = 0;
     function updateStatus(info){
@@ -102,7 +103,7 @@
     function processImagesWithWorkers(images,workerCount) {
       let blockSize = parseInt(document.getElementById("blocksize").value);
       let C = parseInt(document.getElementById("constant").value);
-      let runningWorkers = 0;
+      runningWorkers = 0;
       const onWorkerEnded = function(e) {
         console.log(e);
         runningWorkers = runningWorkers - 1;
@@ -116,7 +117,6 @@
       for (let index = 0; index < workerCount; index++) {
         let worker = new Worker("./binarize.js");
         worker.onmessage = onWorkerEnded;
-        runningWorkers = runningWorkers + 1;
         processOneImageWithWorker(images,blockSize,C,worker);
       }
     }
@@ -126,6 +126,7 @@
       console.log(images);
       console.log(img);
       if (img) {
+        runningWorkers = runningWorkers + 1;
         cvs.width = img.naturalWidth;
         cvs.height = img.naturalHeight;
         let ctx = cvs.getContext("2d");
