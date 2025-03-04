@@ -42,6 +42,10 @@
       Constant C:
       <input type="text" id="constant" placeholder="Constant C" value="10" />
     </label>
+    <label>
+      Use integral image:
+      <input type="checkbox" id="useIntegralImage" checked />
+    </label>
     <button id="adaptiveThresholdButton">Adaptive Threshold</button>
     <div id="status"></div>
     <div id="images"></div>
@@ -123,16 +127,19 @@
         let ctx = cvs.getContext("2d");
         ctx.drawImage(img,0,0);
         let imageData = ctx.getImageData(0,0,img.naturalWidth,img.naturalHeight);
+        let useIntegralImage = document.getElementById("useIntegralImage").checked;
         worker.postMessage({
           imageIndex: img.getAttribute("data-index"),
           imageData: imageData,
           blockSize: blockSize,
+          useIntegralImage: useIntegralImage,
           C: C
         });
       }
     }
 
     function processImagesWithoutWorker(images){
+      let useIntegralImage = document.getElementById("useIntegralImage").checked;
       let blockSize = parseInt(document.getElementById("blocksize").value);
       let C = parseInt(document.getElementById("constant").value);
       let img = images.pop();
@@ -142,7 +149,12 @@
         let ctx = cvs.getContext("2d");
         ctx.drawImage(img,0,0);
         let imageData = ctx.getImageData(0,0,img.naturalWidth,img.naturalHeight);
-        let outputData = adaptiveThreshold(imageData,blockSize,C);
+        let outputData; 
+        if (useIntegralImage) {
+          outputData = adaptiveThreshold(imageData,blockSize,C);
+        } else {
+          outputData = adaptiveThresholdSimple(imageData,blockSize,C);
+        }
         updateProcessedImage(img.getAttribute("data-index"),outputData);
         img = images.pop();
       }

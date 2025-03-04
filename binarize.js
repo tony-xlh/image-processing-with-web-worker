@@ -21,6 +21,44 @@ function getAreaSum(integral, width, x1, y1, x2, y2) {
   return d - b - c + a;
 }
 
+function adaptiveThresholdSimple(imageData, blockSize, C) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const data = imageData.data;
+  const output = new ImageData(width, height);
+  const outputData = output.data;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let count = 0;
+
+      //local mean
+      for (let dy = -blockSize; dy <= blockSize; dy++) {
+        for (let dx = -blockSize; dx <= blockSize; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const idx = (ny * width + nx) * 4;
+            sum += data[idx];
+            count++;
+          }
+        }
+      }
+
+      const threshold = (sum / count) - C;
+      const idx = (y * width + x) * 4;
+      const pixelValue = data[idx];
+
+      // binarize
+      outputData[idx] = outputData[idx + 1] = outputData[idx + 2] = pixelValue > threshold ? 255 : 0;
+      outputData[idx + 3] = 255; // Alpha channel
+    }
+  }
+  return output;
+}
+
+
 function adaptiveThreshold(imageData, blockSize, C) {
   console.log("adaptiveThreshold");
   const width = imageData.width;
@@ -55,6 +93,11 @@ function adaptiveThreshold(imageData, blockSize, C) {
 
 onmessage = (e) => {
   let data = e.data;
-  let imageData = adaptiveThreshold(data.imageData, data.blockSize, data.C);
+  let imageData;
+  if (data.useIntegralImage) {
+    imageData = adaptiveThreshold(data.imageData, data.blockSize, data.C);
+  }else{
+    imageData = adaptiveThresholdSimple(data.imageData, data.blockSize, data.C);
+  }
   postMessage({imageData:imageData,imageIndex:data.imageIndex});
 };
