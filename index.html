@@ -102,10 +102,12 @@
     function processImagesWithWorkers(images,workerCount) {
       let blockSize = parseInt(document.getElementById("blocksize").value);
       let C = parseInt(document.getElementById("constant").value);
+      let runningWorkers = 0;
       const onWorkerEnded = function(e) {
         console.log(e);
+        runningWorkers = runningWorkers - 1;
         updateProcessedImage(e.data.imageIndex,e.data.imageData);
-        if (images.length === 0) {
+        if (images.length === 0 && runningWorkers === 0) {
           console.log("Done");
           displayProcessedTime();
         }
@@ -114,6 +116,7 @@
       for (let index = 0; index < workerCount; index++) {
         let worker = new Worker("./binarize.js");
         worker.onmessage = onWorkerEnded;
+        runningWorkers = runningWorkers + 1;
         processOneImageWithWorker(images,blockSize,C,worker);
       }
     }
