@@ -166,6 +166,7 @@
       if (files.length == 0) {
         return;
       }
+      document.getElementById("images").innerHTML = "";
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
         const fileReader = new FileReader();
