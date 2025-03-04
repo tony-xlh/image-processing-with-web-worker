@@ -67,6 +67,7 @@
 
     function process(){
       console.log("process");
+      updateStatus("Processing...");
       startTime = performance.now();
       let containers = document.getElementsByClassName("imageContainer");
       let imagesToProcess = [];
